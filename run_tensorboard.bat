@@ -1,0 +1,1 @@
+start tensorboard --logdir AllRuns

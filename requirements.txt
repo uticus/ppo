@@ -1,0 +1,12 @@
+numpy==1.19.1
+pandas==0.24.1
+numba==0.51.1
+matplotlib==3.0.2
+box2d-py==2.3.8
+gym==0.17.2
+tensorflow==1.7.1
+tensorboardX==1.6
+Keras==2.2.4
+ruamel.yaml==0.15.89
+scipy==1.5.2
+tqdm==4.31.0
