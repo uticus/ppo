@@ -10,3 +10,4 @@ Keras==2.2.4
 ruamel.yaml==0.15.89
 scipy==1.5.2
 tqdm==4.31.0
+protobuf==3.6.0
