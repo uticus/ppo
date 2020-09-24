@@ -9,3 +9,4 @@ tensorboardX
 ruamel.yaml
 scipy
 tqdm
+Keras
