@@ -6,7 +6,6 @@ box2d-py
 gym
 tensorflow
 tensorboardX
-Keras
 ruamel.yaml
 scipy
 tqdm
