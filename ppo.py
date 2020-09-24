@@ -2,7 +2,7 @@
 
 import os
 import json
-
+import tensorflow as tf
 import numpy as np
 from copy import deepcopy
 
@@ -16,11 +16,12 @@ from tensorboardX import SummaryWriter
 
 from ppo_loss import get_ppo_actor_loss_clipped_obj, get_ppo_actor_loss_clipped_obj_continuous, get_ppo_critic_loss
 
-#ENV = 'LunarLander-v2'
-# CONTINUOUS = False
-ENV = 'LunarLanderContinuous-v2'
-CONTINUOUS = True
 
+ENV = 'LunarLander-v2'
+CONTINUOUS = False
+#ENV = 'LunarLanderContinuous-v2'
+#CONTINUOUS = True
+tf.compat.v1.disable_eager_execution()
 
 EPISODES = 100000
 EPISODES_START_WATCH = 90000
