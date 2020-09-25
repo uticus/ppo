@@ -2,7 +2,7 @@
 
 # import agents
 
-import numpy  as np
+import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras import backend as K
@@ -142,7 +142,7 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
         # print(squared_noise.dtype)
         # print(denominator.dtype)
 
-        if K.is_tensor(y_true):
+        if tf.is_tensor(y_true):
             policy = K.exp(- K.square(y_true - y_pred) / (2 * squared_noise)) / denominator
             policy_old = K.exp(- K.square(y_true - old_prediction_input) / (2 * squared_noise)) / denominator
         else:

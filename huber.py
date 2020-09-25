@@ -2,7 +2,7 @@
 
 #import agents
 
-import numpy  as np
+import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras import backend as K
