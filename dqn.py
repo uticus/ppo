@@ -6,9 +6,13 @@ from copy import deepcopy
 
 import gym
 import numpy as np
-from keras.layers import Dense
-from keras.models import Sequential
-from keras.optimizers import RMSprop
+import tensorflow as tf
+
+from tensorflow.keras import backend as K
+
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import RMSprop
 
 
 ########################################################
@@ -241,7 +245,7 @@ class RandomAgent:
         '''
         action = self.act(state)
         action = [0]*self.action_size
-        action[act] = 1
+        action[self.act] = 1
         return action
 
 

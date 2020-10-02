@@ -8,20 +8,24 @@ from copy import deepcopy
 
 import gym
 
+from tensorflow.keras import backend as K
+
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.optimizers import Adam
 
 from tensorboardX import SummaryWriter
 
-from ppo_loss import get_ppo_actor_loss_clipped_obj, get_ppo_actor_loss_clipped_obj_continuous, get_ppo_critic_loss
-
+#from ppo_loss import get_ppo_actor_loss_clipped_obj, get_ppo_actor_loss_clipped_obj_continuous, get_ppo_critic_loss
+from ppo_loss import PPOCriticLoss, PPOActorLoss, PPOActorLossContinuous
 
 ENV = 'LunarLander-v2'
 CONTINUOUS = False
 #ENV = 'LunarLanderContinuous-v2'
 #CONTINUOUS = True
-tf.compat.v1.disable_eager_execution()
+#tf.compat.v1.disable_eager_execution()
+#tf.config.experimental_run_functions_eagerly(True)
+#experimental_run_tf_function=False
 
 EPISODES = 100000
 EPISODES_START_WATCH = 90000
@@ -242,7 +246,7 @@ class ActorModelDiscrete(ActorModelBase):
     def createLoss(self, **kwargs):
         input_advantage_ = self.model.input[1]
         input_old_prediction_ = self.model.input[2]
-        return get_ppo_actor_loss_clipped_obj(
+        return PPOActorLoss(
             input_advantage_,
             input_old_prediction_,
             clip_epsilon=self.loss_clip_epsilon,
@@ -267,7 +271,7 @@ class ActorModelContinuous(ActorModelBase):
     def createLoss(self, **kwargs):
         input_advantage_ = self.model.input[1]
         input_old_prediction_ = self.model.input[2]
-        return get_ppo_actor_loss_clipped_obj_continuous(
+        return PPOActorLossContinuous(
             input_advantage_,
             input_old_prediction_,
             clip_epsilon=self.loss_clip_epsilon,
@@ -289,7 +293,7 @@ class CriticModel:
         self.metrics = kwargs.get('metrics', None)
 
         self.loss_clip = float(kwargs.get('loss_clip', np.inf))
-        self.loss = get_ppo_critic_loss(self.loss_clip)
+        self.loss = PPOCriticLoss(self.loss_clip)
 
         learning_rate = kwargs.get('learning_rate', 1e-4)
         self.optimizer = kwargs.get('optimizer', Adam(lr=learning_rate))

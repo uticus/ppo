@@ -7,14 +7,30 @@ import tensorflow as tf
 
 from tensorflow.keras import backend as K
 
-from huber import huber_loss_function, mean_squared_loss
+if __name__ == "__main__" or __package__ == '':
+    # imports for __main__
+    from huber import HuberLoss
+else:
+    # imports for internal tests
+    from .huber import HuberLoss
+
+
 
 #
 # [Proximal Policy Optimization Algorithms,2017] (../../papers/ppo.pdf)
 # improved
 #
+class PPOCriticLoss(HuberLoss):
+    """
+    huber loss function
+    """
+    def __init__(self,
+                 clip_value=np.inf,
+                 reduction=tf.keras.losses.Reduction.AUTO, name='PPOCriticLoss'):
+        super().__init__(clip_value=clip_value, reduction=reduction, name=name)
 
-def get_ppo_actor_loss_clipped_obj(advantage_input, old_prediction_input, clip_epsilon=0.2, beta=0.01):
+
+class PPOActorLoss(tf.keras.losses.Loss):
     """
         Make loss function for Proximal Policy optimization with clipped objective
 
@@ -42,50 +58,60 @@ def get_ppo_actor_loss_clipped_obj(advantage_input, old_prediction_input, clip_e
 
     """
 
-    def __actor_loss(y_true, y_pred):
-        epsilon = 1e-10
-        # epsilon = K.epsilon()  # 1e-7
+    def __init__(self,
+                 old_prediction_input,
+                 advantage_input,
+                 clip_epsilon: float = 0.2,
+                 beta: float = 0.01,
+                 reduction = tf.keras.losses.Reduction.AUTO,
+                 name='PPOActorLoss'):
 
-        # p = y_pred
+        self.old_prediction_input = old_prediction_input
+        self.advantage_input = advantage_input
+        self.clip_epsilon = clip_epsilon
+        self.beta = beta
+        self.epsilon = 1e-10
 
-        # probability = K.sum(y_true * p, axis=1)
+        super().__init__(reduction=reduction, name=name)
 
+    def _loss(self, y_true, y_pred):
         policy = y_true * y_pred
-        policy_old = y_true * old_prediction_input
+        policy_old = y_true * self.old_prediction_input
 
         # add epsilon to avoid dividing by zero
-        ratio = policy / (policy_old + epsilon)
-        # K.clip may rise an error of unclear type - convert to tensor 
+        ratio = policy / (policy_old + self.epsilon)
+        # K.clip may rise an error of unclear type - convert to tensor
         ratio = tf.convert_to_tensor(ratio)
 
         # clip ratio
         ratio_clipped = K.clip(
             ratio,
-            min_value=1 - clip_epsilon,
-            max_value=1 + clip_epsilon)
+            min_value=1 - self.clip_epsilon,
+            max_value=1 + self.clip_epsilon)
 
         # minimum between the standard surrogate loss and an epsilon clipped surrogate loss
-        surrogate = K.minimum(ratio * advantage_input, ratio_clipped * advantage_input)
+        surrogate = K.minimum(ratio * self.advantage_input, ratio_clipped * self.advantage_input)
 
         # adding the entropy of the policy pi to the objective function improved exploration by discouraging premature
-        # convergence to suboptimal deterministic policies. 
+        # convergence to suboptimal deterministic policies.
         # This technique was originally proposed by (Williams & Peng, 1991),
         # entropy_reg = beta * Gradient theta' ( H(pi(st;theta')) )
         # H is entropy
         # entropy  = p * K.log(p + epsilon)
-        entropy_reg = beta * K.sum(policy * K.log(policy + epsilon))
+        entropy_reg = self.beta * K.sum(policy * K.log(policy + self.epsilon))
 
         policy_loss = -K.mean(surrogate)
 
         # input for the back propagation
         actor_loss = policy_loss + entropy_reg
 
-        # alternative 
+        # alternative
         # entropy = beta *  policy * K.log(policy + epsilon)
         # actor_loss = -K.mean(surrogate + entropy)
         return actor_loss
 
-    return __actor_loss
+    def call(self, y_true, y_pred):
+        return self._loss(y_true, y_pred)
 
 
 #
@@ -96,16 +122,16 @@ def get_ppo_actor_loss_clipped_obj(advantage_input, old_prediction_input, clip_e
 # [The Beta Policy for Continuous Control Reinforcement Learning, 2017](../../papers/thesis_chou.pdf)
 #
 
-def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_input, clip_epsilon=0.2, sigma=1.0):
+class PPOActorLossContinuous(tf.keras.losses.Loss):
     '''
         Make loss function for Proximal Policy optimization with clipped objective
 
         advantage = rewards - values
-        
+
         current policy pi(at|st)
         second policy pi_theta(at|st)
 
-        pi_theta(a|s) = exp ( -square(a - mu) / (2 * square(sigma) ) )  / 
+        pi_theta(a|s) = exp ( -square(a - mu) / (2 * square(sigma) ) )  /
                                                         ( sqrt(2 * np.pi ) * sigma )
         where the mean mu = mu_theta(s) (y_pred)
         and the standard deviation sigma = sigma_theta(s) is a noise
@@ -113,7 +139,7 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
 
         ratio between new and old policy
 
-        according to mentioned paper, the clipping for surrogate loss is better then KL penalty. 
+        according to mentioned paper, the clipping for surrogate loss is better then KL penalty.
         we implement only clipping.
 
 
@@ -121,8 +147,18 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
 
     '''
 
-    def __actor_loss(y_true, y_pred):
-        epsilon = 1e-10
+    def __init__(self,
+                 old_prediction_input,
+                 advantage_input,
+                 clip_epsilon: float = 0.2,
+                 sigma: float = 1.0,
+                 reduction=tf.keras.losses.Reduction.AUTO, name='PPOActorLossContinuous'):
+        super().__init__(reduction=reduction, name=name)
+        self.old_prediction_input = old_prediction_input
+        self.advantage_input = advantage_input
+        self.clip_epsilon = clip_epsilon
+        self.sigma =sigma
+        self.epsilon = 1e-10
         # epsilon = K.epsilon()  # 1e-7
 
         # p = y_pred
@@ -135,8 +171,8 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
         # print(y_true.get_shape())
         # print(type(y_pred))
         # print(y_pred.dtype)
-
-        squared_noise = K.square(sigma)
+    def _loss(self, y_true ,y_pred):
+        squared_noise = K.square(self.sigma)
         denominator = K.sqrt(2 * np.pi * squared_noise)
 
         # print(squared_noise.dtype)
@@ -144,27 +180,27 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
 
         if tf.is_tensor(y_true):
             policy = K.exp(- K.square(y_true - y_pred) / (2 * squared_noise)) / denominator
-            policy_old = K.exp(- K.square(y_true - old_prediction_input) / (2 * squared_noise)) / denominator
+            policy_old = K.exp(- K.square(y_true - self.old_prediction_input) / (2 * squared_noise)) / denominator
         else:
             a_mu = tf.convert_to_tensor(y_true - y_pred, dtype=tf.float32)
-            a_mu_old = tf.convert_to_tensor(y_true - old_prediction_input, tf.float32)
+            a_mu_old = tf.convert_to_tensor(y_true - self.old_prediction_input, tf.float32)
             policy = K.exp(- K.square(a_mu) / (2 * squared_noise)) / denominator
             policy_old = K.exp(- K.square(a_mu_old) / (2 * squared_noise)) / denominator
 
         # add epsilon to avoid dividing by zero
-        ratio = policy / (policy_old + epsilon)
+        ratio = policy / (policy_old + self.epsilon)
 
-        # K.clip may rise an error of unclear type - convert to tensor 
+        # K.clip may rise an error of unclear type - convert to tensor
         ratio = tf.convert_to_tensor(ratio)
 
         # clip ratio
         ratio_clipped = K.clip(
             ratio,
-            min_value=1 - clip_epsilon,
-            max_value=1 + clip_epsilon)
+            min_value=1 - self.clip_epsilon,
+            max_value=1 + self.clip_epsilon)
 
         # minimum between the standard surrogate loss and an epsilon clipped surrogate loss
-        surrogate = K.minimum(ratio * advantage_input, ratio_clipped * advantage_input)
+        surrogate = K.minimum(ratio * self.advantage_input, ratio_clipped * self.advantage_input)
 
         policy_loss = -K.mean(surrogate)
 
@@ -175,15 +211,11 @@ def get_ppo_actor_loss_clipped_obj_continuous(advantage_input, old_prediction_in
 
         return actor_loss
 
-    return __actor_loss
+    def call(self, y_true, y_pred):
+        return self._loss(y_true, y_pred)
 
 
-def get_ppo_critic_loss(clip_value=np.inf):
-    ''' mean of squared errors '''
-    # def __critic_loss(y_true, y_pred):
-    #    return K.mean(K.square(y_true - y_pred), axis=-1)
-    # return __critic_loss
-    return huber_loss_function(clip_value)
+
 
 
 def test():
@@ -198,11 +230,11 @@ def test():
     # a_i = 0.
     op_i = np.random.random(shape)
 
-    loss = get_ppo_actor_loss_clipped_obj(a_i, op_i, clip_epsilon=0.2, beta=0.01)
+    loss = PPOActorLoss(a_i, op_i, clip_epsilon=0.2, beta=0.01)
 
     print("")
     print("================")
-    print("get_ppo_actor_loss_clipped_obj")
+    print("PPOActorLoss")
     print("================")
     out1 = K.eval(loss(K.variable(y_a), K.variable(y_b)))
     print(out1)
@@ -211,11 +243,11 @@ def test():
     print(out2)
     print("================")
 
-    loss = get_ppo_actor_loss_clipped_obj_continuous(a_i, op_i, clip_epsilon=0.2, sigma=1.0)
+    loss = PPOActorLossContinuous(a_i, op_i, clip_epsilon=0.2, sigma=1.0)
 
     print("")
     print("================")
-    print("get_ppo_actor_loss_clipped_obj_continuous")
+    print("PPOActorLossContinuous")
     print("================")
     out1 = K.eval(loss(tf.convert_to_tensor(y_a, dtype=tf.float32), tf.convert_to_tensor(y_b, dtype=tf.float32)))
     print(out1)
@@ -224,7 +256,7 @@ def test():
     print(out2)
     print("================")
 
-    loss = get_ppo_critic_loss(np.inf)
+    loss = PPOCriticLoss(np.inf)
 
     print("")
     print("================")
@@ -237,7 +269,7 @@ def test():
     print(out2)
     print("================")
 
-    loss = get_ppo_critic_loss(1.0)
+    loss = PPOCriticLoss(1.0)
     print("")
     print("================")
     print("get_ppo_critic_loss (1.0)")
@@ -255,3 +287,4 @@ if __name__ == "__main__":
 
     print("passed")
     input("Enter to exit")
+    exit()
