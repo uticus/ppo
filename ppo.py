@@ -132,6 +132,7 @@ class GymEnvironment:
 
 class ActorModelBase:
     def __init__(self, state_size, action_size, **kwargs):
+
         self.state_size = state_size
         self.action_size = action_size
         self.batch_size = kwargs.get('batch_size', 1)
@@ -155,7 +156,6 @@ class ActorModelBase:
         self.activation_last = kwargs.get('activation_last', 'softmax')
 
         self.Initialize(**kwargs)
-        pass
 
     def Initialize(self, **kwargs):
         model = kwargs.get('model', None)
@@ -196,14 +196,36 @@ class ActorModelBase:
 
         return model
 
-    def createLoss(self, **kwargs):
+    def createloss(self, **kwargs):
         """ create loss function """
-        raise NotImplementedError
+        self.loss = kwargs.get('loss', self.loss)
+
+        if self.loss is None:
+            self.loss = PPOActorLoss(
+                old_prediction_input=self.old_prediction_input,
+                advantage_input=self.advantage_input,
+                clip_epsilon=self.loss_clip_epsilon,
+                sigma=self.loss_sigma
+            )(self.y_true, self.y_pred)
+
+        # add loss function into the model
+        self.model.add_loss(self.loss)
 
     @property
     def continuous(self):
         """ return if continuous action space """
-        raise NotImplementedError
+        self.loss = kwargs.get('loss', self.loss)
+
+        if self.loss is None:
+            self.loss = PPOActorLossContinuous(
+                old_prediction_input=self.old_prediction_input,
+                advantage_input=self.advantage_input,
+                clip_epsilon=self.loss_clip_epsilon,
+                sigma=self.loss_sigma
+            )(self.y_true, self.y_pred)
+
+        # add loss function into the model
+        self.model.add_loss(self.loss)
 
 
     def compileModel(self, **kwargs):
