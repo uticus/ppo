@@ -23,7 +23,7 @@ ENV = 'LunarLander-v2'
 CONTINUOUS = False
 #ENV = 'LunarLanderContinuous-v2'
 #CONTINUOUS = True
-#tf.compat.v1.disable_eager_execution()
+tf.compat.v1.disable_eager_execution()
 #tf.config.experimental_run_functions_eagerly(True)
 #experimental_run_tf_function=False
 
@@ -133,6 +133,7 @@ class GymEnvironment:
 class ActorModelBase:
     def __init__(self, state_size, action_size, **kwargs):
 
+
         self.state_size = state_size
         self.action_size = action_size
         self.batch_size = kwargs.get('batch_size', 1)
@@ -155,7 +156,15 @@ class ActorModelBase:
         self.activation = kwargs.get('activation', 'tanh')
         self.activation_last = kwargs.get('activation_last', 'softmax')
 
+        self.y_pred = None
+        self.y_true = None
+        self.loss = None
+        self.loss_clip_epsilon = None
+        self.advantage_input = None
+        self.old_prediction_input = None
+
         self.Initialize(**kwargs)
+
 
     def Initialize(self, **kwargs):
         model = kwargs.get('model', None)
@@ -165,6 +174,7 @@ class ActorModelBase:
         else:
             self.model = self.createModel(**kwargs)
             self.compileModel(**kwargs)
+
         self.x_shape, self.y_shape = self.get_input_shapes()
 
     def createModel(self, **kwargs):
@@ -196,36 +206,14 @@ class ActorModelBase:
 
         return model
 
-    def createloss(self, **kwargs):
+    def createLoss(self, **kwargs):
         """ create loss function """
-        self.loss = kwargs.get('loss', self.loss)
-
-        if self.loss is None:
-            self.loss = PPOActorLoss(
-                old_prediction_input=self.old_prediction_input,
-                advantage_input=self.advantage_input,
-                clip_epsilon=self.loss_clip_epsilon,
-                sigma=self.loss_sigma
-            )(self.y_true, self.y_pred)
-
-        # add loss function into the model
-        self.model.add_loss(self.loss)
+        raise NotImplementedError
 
     @property
     def continuous(self):
         """ return if continuous action space """
-        self.loss = kwargs.get('loss', self.loss)
-
-        if self.loss is None:
-            self.loss = PPOActorLossContinuous(
-                old_prediction_input=self.old_prediction_input,
-                advantage_input=self.advantage_input,
-                clip_epsilon=self.loss_clip_epsilon,
-                sigma=self.loss_sigma
-            )(self.y_true, self.y_pred)
-
-        # add loss function into the model
-        self.model.add_loss(self.loss)
+        raise NotImplementedError
 
 
     def compileModel(self, **kwargs):
@@ -255,31 +243,40 @@ class ActorModelBase:
 
     pass
 
-
+#Changing the loss function of model to fit more like the Dafna example
 class ActorModelDiscrete(ActorModelBase):
     def __init__(self, state_size, action_size, **kwargs):
         # clipping for the surrogate loss
         self.loss_clip_epsilon = kwargs.get('loss_clip_epsilon', 0.2)
         self.loss_entropy_beta = kwargs.get('loss_entropy_beta', 1e-3)
-
         super().__init__(state_size, action_size, **kwargs)
-        pass
+
+    @classmethod
+    def config(cls, config_data):
+        base_config = super().config(config_data)
+        cfg = config_data.get('PPODiscreteActorModel', {})
+        return {**base_config, **cfg}
+
+
 
     def createLoss(self, **kwargs):
-        input_advantage_ = self.model.input[1]
-        input_old_prediction_ = self.model.input[2]
-        return PPOActorLoss(
-            input_advantage_,
-            input_old_prediction_,
-            clip_epsilon=self.loss_clip_epsilon,
-            beta=self.loss_entropy_beta)
+        self.loss = kwargs.get('loss', self.loss)
 
-    @property
-    def continuous(self):
-        """ return if continuous action space """
-        return False
+        if self.loss is None:
+            self.loss = PPOActorLoss(
+                old_prediction_input=self.old_prediction_input,
+                advantage_input=self.advantage_input,
+                clip_epsilon=self.loss_clip_epsilon,
+                beta=self.loss_entropy_beta
+            )(self.y_true, self.y_pred)
 
-    pass
+        self.model.add_loss(self.loss)
+
+    def get_kwargs(self):
+        kwargs = super().get_kwargs()
+        kwargs['loss_clip_epsilon'] = self.loss_clip_epsilon
+        kwargs['loss_entropy_beta'] = self.loss_entropy_beta
+        return kwargs
 
 
 class ActorModelContinuous(ActorModelBase):
